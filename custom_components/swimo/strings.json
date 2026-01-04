@@ -1,0 +1,18 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configuration Swimo",
+        "description": "Connectez votre système Swimo",
+        "data": {
+          "email": "Email",
+          "password": "Mot de passe"
+        }
+      }
+    },
+    "error": {
+      "auth_error": "Identifiants invalides",
+      "unknown": "Erreur inconnue"
+    }
+  }
+}
