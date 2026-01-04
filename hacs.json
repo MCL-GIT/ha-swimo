@@ -1,0 +1,9 @@
+{
+  "name": "Swimo Pool Controller",
+  "content_in_root": false,
+  "filename": "ha-swimo.zip",
+  "render_readme": true,
+  "domains": ["sensor", "switch", "number", "binary_sensor"],
+  "iot_class": "cloud_polling",
+  "homeassistant": "2024.1.0"
+}
