@@ -4,7 +4,7 @@
   "codeowners": ["@swimo"],
   "config_flow": true,
   "dependencies": [],
-  "documentation": "https://github.com/yourusername/ha-swimo",
+  "documentation": "https://github.com/MCL-GIT/ha-swimo",
   "integration_type": "hub",
   "iot_class": "cloud_polling",
   "requirements": ["aiohttp>=3.8.0", "python-socketio>=5.7.0"],

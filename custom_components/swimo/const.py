@@ -1,7 +1,11 @@
-"""Constantes pour l'intégration Swimo."""
+
+# ============================================================================
+# custom_components/swimo/const.py
+# ============================================================================
 
 DOMAIN = "swimo"
 
+# Types de capteurs
 SENSOR_TYPES = {
     1: {"name": "pH", "unit": "pH", "icon": "mdi:ph"},
     2: {"name": "Redox", "unit": "mV", "icon": "mdi:water-check"},
@@ -13,6 +17,7 @@ SENSOR_TYPES = {
     12: {"name": "Niveau d'eau", "unit": "", "icon": "mdi:waves"},
 }
 
+# Types d'appareils
 DEVICE_TYPES = {
     "pump": {"name": "Pompe", "icon": "mdi:pump"},
     "light": {"name": "Éclairage", "icon": "mdi:lightbulb"},
@@ -22,5 +27,7 @@ DEVICE_TYPES = {
     "chlorine_pump": {"name": "Pompe Chlore", "icon": "mdi:flask"},
 }
 
+# Configuration WebSocket
 WEBSOCKET_ENABLED = True
-WEBSOCKET_RECONNECT_DELAY = 5
+WEBSOCKET_RECONNECT_DELAY = 5  # secondes
+
