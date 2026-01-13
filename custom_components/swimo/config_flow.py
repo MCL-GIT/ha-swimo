@@ -1,8 +1,7 @@
-
 # ============================================================================
-# custom_components/swimo/config_flow.py
+# config_flow.py - Flux de configuration
 # ============================================================================
-
+"""Flux de configuration Swimo."""
 from homeassistant import config_entries
 from homeassistant.core import callback
 import voluptuous as vol
@@ -40,7 +39,7 @@ class SwimoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         sys_info = data["system"]
                         if isinstance(sys_info, list) and len(sys_info) > 0:
                             sys_info = sys_info[0]
-                        system_name = sys_info.get("sys_ref", "Piscine")
+                            system_name = sys_info.get("sys_name", "Piscine").capitalize()
                     
                     await api.close()
                     
@@ -68,4 +67,3 @@ class SwimoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 "password": "Votre mot de passe"
             }
         )
-

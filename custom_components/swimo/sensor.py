@@ -10,7 +10,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.const import UnitOfTemperature
 import logging
 
-from .const import DOMAIN, SENSOR_TYPES
+from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -27,43 +27,55 @@ async def async_setup_entry(
     
     # Capteurs de mesure
     sensors = coordinator.data.get("sensors", [])
+    _LOGGER.info(f"Création de {len(sensors)} capteurs")
+    
     for sensor in sensors:
-        sensor_num = sensor.get("sensor_index") or sensor.get("sensorNum")
+        sensor_num = sensor.get("sensor_number")
         if sensor_num:
             entities.append(SwimoSensor(coordinator, sensor, entry.entry_id))
+            _LOGGER.debug(f"Capteur créé: {sensor.get('sensor_name')} (#{sensor_num})")
     
     # Capteurs système
-    system = coordinator.data.get("system", {})
-    if isinstance(system, list) and len(system) > 0:
-        system = system[0]
+    system = coordinator.data.get("system", [])
+    if system and len(system) > 0:
+        entities.append(SwimoSystemSensor(coordinator, "sys_volume", "Volume piscine", "m³", entry.entry_id))
+        entities.append(SwimoSystemSensor(coordinator, "sys_name", "Modèle", "", entry.entry_id))
     
-    if system:
-        entities.append(SwimoSystemSensor(coordinator, "volume", "Volume", "m³", entry.entry_id))
-        entities.append(SwimoSystemSensor(coordinator, "sys_type_display", "Type", "", entry.entry_id))
-    
+    _LOGGER.info(f"Total entités créées: {len(entities)}")
     async_add_entities(entities)
 
 
 class SwimoSensor(CoordinatorEntity, SensorEntity):
-    """Capteur de mesure Swimo (pH, température, etc.)."""
+    """Capteur de mesure Swimo."""
     
     def __init__(self, coordinator, sensor_data, entry_id):
         super().__init__(coordinator)
         self._sensor_data = sensor_data
-        self._sensor_num = sensor_data.get("sensor_index") or sensor_data.get("sensorNum")
+        self._sensor_num = sensor_data.get("sensor_number")
         self._entry_id = entry_id
         
-        sensor_info = SENSOR_TYPES.get(self._sensor_num, {})
-        self._attr_name = sensor_data.get("sensor_name") or sensor_info.get("name", f"Capteur {self._sensor_num}")
+        self._attr_name = f"Swimo {sensor_data.get('sensor_name', f'Capteur {self._sensor_num}')}"
         self._attr_unique_id = f"swimo_{entry_id}_sensor_{self._sensor_num}"
-        self._attr_icon = sensor_info.get("icon", "mdi:gauge")
+        
+        # Icône selon le type de capteur
+        sensor_hash = sensor_data.get("sensor_hash", "")
+        if "PH" in sensor_hash:
+            self._attr_icon = "mdi:ph"
+        elif "TEMP" in sensor_hash:
+            self._attr_icon = "mdi:thermometer"
+            self._attr_device_class = SensorDeviceClass.TEMPERATURE
+        elif "ORP" in sensor_hash or "CL" in sensor_hash:
+            self._attr_icon = "mdi:flask"
+        elif "PRESSURE" in sensor_hash:
+            self._attr_icon = "mdi:gauge"
+        elif "TANK" in sensor_hash or "LEVEL" in sensor_hash:
+            self._attr_icon = "mdi:water-percent"
+        else:
+            self._attr_icon = "mdi:gauge"
         
         # Unité de mesure
-        unit = sensor_data.get("sensor_unit") or sensor_info.get("unit")
-        self._attr_native_unit_of_measurement = unit
-        
-        # Device class
-        if self._sensor_num == 4:  # Température
+        self._attr_native_unit_of_measurement = sensor_data.get("sensor_unit")
+        if self._attr_native_unit_of_measurement == "°C":
             self._attr_device_class = SensorDeviceClass.TEMPERATURE
             self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
         
@@ -74,13 +86,14 @@ class SwimoSensor(CoordinatorEntity, SensorEntity):
         """Valeur du capteur."""
         sensors = self.coordinator.data.get("sensors", [])
         for sensor in sensors:
-            sensor_num = sensor.get("sensor_index") or sensor.get("sensorNum")
-            if sensor_num == self._sensor_num:
-                value = sensor.get("sensor_value") or sensor.get("value")
-                try:
-                    return float(value)
-                except (ValueError, TypeError):
-                    return value
+            if sensor.get("sensor_number") == self._sensor_num:
+                # Utiliser sensor_min qui contient la valeur actuelle
+                value = sensor.get("sensor_min") or sensor.get("sensor_max")
+                if value is not None and value != "":
+                    try:
+                        return float(value)
+                    except (ValueError, TypeError):
+                        return value
         return None
     
     @property
@@ -88,20 +101,30 @@ class SwimoSensor(CoordinatorEntity, SensorEntity):
         """Attributs supplémentaires."""
         sensors = self.coordinator.data.get("sensors", [])
         for sensor in sensors:
-            sensor_num = sensor.get("sensor_index") or sensor.get("sensorNum")
-            if sensor_num == self._sensor_num:
-                attrs = {}
-                if "valueRaw" in sensor:
-                    attrs["raw_value"] = sensor["valueRaw"]
-                if "sensor_type" in sensor:
-                    attrs["type"] = sensor["sensor_type"]
+            if sensor.get("sensor_number") == self._sensor_num:
+                attrs = {
+                    "sensor_status": sensor.get("sensor_status"),
+                    "sensor_alarm": sensor.get("sensor_alarm") == "1",
+                }
                 
-                # Ajouter l'état de la connexion WebSocket
+                if "sensor_raw_sensor" in sensor:
+                    attrs["raw_value"] = sensor["sensor_raw_sensor"]
+                
+                if "sensor_text" in sensor:
+                    attrs["status_text"] = sensor["sensor_text"].strip()
+                
+                # Limites
+                if sensor.get("sensor_alarm_min"):
+                    attrs["alarm_min"] = sensor["sensor_alarm_min"]
+                if sensor.get("sensor_alarm_max"):
+                    attrs["alarm_max"] = sensor["sensor_alarm_max"]
+                
+                # Connexion WebSocket
                 api = self.hass.data[DOMAIN][self._entry_id]["api"]
                 attrs["websocket_connected"] = api.is_websocket_connected()
                 
                 return attrs
-        return {"websocket_connected": False}
+        return {}
 
 
 class SwimoSystemSensor(CoordinatorEntity, SensorEntity):
@@ -110,7 +133,7 @@ class SwimoSystemSensor(CoordinatorEntity, SensorEntity):
     def __init__(self, coordinator, key, name, unit, entry_id):
         super().__init__(coordinator)
         self._key = key
-        self._attr_name = f"Piscine {name}"
+        self._attr_name = f"Swimo {name}"
         self._attr_unique_id = f"swimo_{entry_id}_system_{key}"
         self._attr_native_unit_of_measurement = unit
         self._attr_icon = "mdi:information"
@@ -118,8 +141,7 @@ class SwimoSystemSensor(CoordinatorEntity, SensorEntity):
     @property
     def native_value(self):
         """Valeur du capteur système."""
-        system = self.coordinator.data.get("system", {})
-        if isinstance(system, list) and len(system) > 0:
-            system = system[0]
-        return system.get(self._key)
-
+        system = self.coordinator.data.get("system", [])
+        if system and len(system) > 0:
+            return system[0].get(self._key)
+        return None
